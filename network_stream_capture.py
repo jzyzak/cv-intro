@@ -1,4 +1,6 @@
 import argparse
+import lane_following
+import lane_detection
 
 import cv2
 
@@ -13,9 +15,11 @@ def main(ip_address):
 
             # Check frame was received successfully
             if ret:
-                print(" YOU GOT THIS ")
-                print(frame.shape)
-                # TODO: Do something with the frame here
+                lines = lane_detection.detect_lines(frame)
+                lanes = lane_detection.detect_lanes(lines)
+                center, slope = lane_following.get_lane_center(lanes)
+                print(lane_following.recommend_direction(center, slope))
+
 
             else:
                 pass
