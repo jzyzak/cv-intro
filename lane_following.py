@@ -25,32 +25,6 @@ def draw_center_lane(img, center_intercept, center_slope, xPoint = 0, yPoint = 0
     cv2.line(img, (int(center_intercept), imgPixelHeight), (int(xPoint), int(yPoint)), (0,0,255), 6)
     return img
 
-def recommend_direction(center, slope):
-    
-    halfOfRes = 1920/2
-    HorizontalDiff = halfOfRes-center
-    centerTolerance = 2.5
-    if abs(HorizontalDiff) < centerTolerance:
-        direction = "Go Forward!"
-    elif HorizontalDiff > 0:# more than halfway
-        #print("strafe right")
-        direction = f"Strafe Left by {HorizontalDiff}"
-    else:
-        #print("strafe left")
-        direction = f"Strafe Right by {HorizontalDiff}"
-
-    AproxAUVAngle = 90 - angle_between_lines(slope, 0)  
-    # get the approx angle of the auv with the line by calculating the slope of the 
-    #center line with a horizontal line relative to the rov
-    if slope > 0:
-        AproxAUVAngle = -AproxAUVAngle
-        direction += f" turn Left by: {AproxAUVAngle} degrees"
-        pass#print("turn right")
-    if slope < 0:
-        direction += f" turn Right by: {AproxAUVAngle} degrees"
-        pass#print("turn Left")
-    return direction
-
 def low_pass_filter_moving_median(input_data, window_size):
     """
     Apply a first-order low-pass filter using the Moving Median method to the input data.
@@ -83,8 +57,9 @@ def PIDoutputPosition(horizontal_diff, pid):
 
 #def thrusterDirections(center, slope):
 
-def set_horizontal_control(horizontal_diff, pid_output):
+def set_horizontal_control(horizontal_diff, horizontal_pid):
     # Calculate the power contribution for a thruster based on its angle and PID output
+    pid_output = horizontal_pid.update(horizontal_diff)
     thruster_power = pid_output * np.cos(np.pi/4)
 
     # Scale the power to the range of -100 to 100
@@ -103,8 +78,9 @@ def set_horizontal_control(horizontal_diff, pid_output):
         thruster_magnitudes = [0, 0, 0, 0, 0, 0]
     return thruster_magnitudes
 
-def set_heading_control(heading_diff, pid_output):
+def set_heading_control(heading_diff, heading_pid):
     # Calculate the power contribution for a thruster based on its angle and PID output
+    pid_output = heading_pid.update(heading_diff)
     thruster_power = pid_output * np.cos(np.pi/4)
 
     # Scale the power to the range of -100 to 100
@@ -126,3 +102,50 @@ def set_heading_control(heading_diff, pid_output):
 def do_both(horizontal_control, heading_control):
     combined_vectors = np.clip((horizontal_control + heading_control), -100, 100)
     return combined_vectors
+
+def run_motors_timed(mav_connection, seconds: int, motor_settings: list) -> None:
+    """
+    Run the motors for a set time
+    :param mav_connection: The mavlink connection
+    :param time: The time to run the motors
+    :param motor_settings: The motor settings, a list of 6 values -100 to 100
+    :return: None
+    """
+    start_time = time.time()
+    while time.time()-start_time < seconds:
+        for i in range(len(motor_settings)):
+            test_motor(mav_connection=mav_connection, motor_id=i, power=motor_settings[i])
+        time.sleep(0.2)
+
+def recommend_direction(center, slope, horizontal_pid, heading_pid):
+    
+    halfOfRes = 1920/2
+    HorizontalDiff = halfOfRes-center
+    centerTolerance = 2.5
+    if abs(HorizontalDiff) < centerTolerance:
+        direction = "Go Forward!"
+    elif HorizontalDiff > 0:# more than halfway
+        #print("strafe right")
+        direction = f"Strafe Left by {HorizontalDiff}"
+    else:
+        #print("strafe left")
+        direction = f"Strafe Right by {HorizontalDiff}"
+
+    horizontal_magnitudes = set_horizontal_control(HorizontalDiff, PIDoutputPosition(HorizontalDiff, horizontal_pid))
+
+    AproxAUVAngle = 90 - angle_between_lines(slope, 0)  
+    # get the approx angle of the auv with the line by calculating the slope of the 
+    #center line with a horizontal line relative to the rov
+    if slope > 0:
+        AproxAUVAngle = -AproxAUVAngle
+        direction += f" turn Left by: {AproxAUVAngle} degrees"
+        pass#print("turn right")
+    if slope < 0:
+        direction += f" turn Right by: {AproxAUVAngle} degrees"
+        pass#print("turn Left")
+
+    heading_magnitudes = set_heading_control(AproxAUVAngle, heading_pid)
+
+    thruster_magnitudes = do_both(horizontal_magnitudes, heading_magnitudes)
+
+    return direction, thruster_magnitudes
