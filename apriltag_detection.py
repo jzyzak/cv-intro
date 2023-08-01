@@ -5,15 +5,13 @@ import matplotlib.pyplot as plt
 from PIDcontrols import *
 
 def PID_tags(frameShape, horizontal_distance, vertical_distance, horizontal_pid, vertical_pid):
-    horizontal_error = ((frameShape[0]/2)-horizontal_distance)*0.0002645833 
-    #horizontal_error = ((frameShape[0]/2)-horizontal_distance)
-    vertical_error = ((frameShape[1]/2)-vertical_distance)*0.0002645833 
-    #vertical_error = ((frameShape[1]/2)-vertical_distance)
+    horizontal_error = ((frameShape[1]/2)-horizontal_distance)/frameShape[1]
+    vertical_error = ((frameShape[0]/2)-vertical_distance)/frameShape[0]
 
     # Add low pass filter/gaussian blur stuff
 
-    horizontal_output = np.clip(horizontal_pid.update(horizontal_error), -100, 100)
-    vertical_output = np.clip(vertical_pid.update(vertical_error), -100, 100)
+    horizontal_output = (np.clip(horizontal_pid.update(horizontal_error), -100, 100))*100
+    vertical_output = (np.clip(vertical_pid.update(vertical_error), -100, 100))*100
 
     return horizontal_output, vertical_output
     
